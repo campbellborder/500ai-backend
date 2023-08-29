@@ -1,41 +1,44 @@
+import json
+
 from fastapi import (
     FastAPI,
     WebSocket,
-    WebSocketException,
+    WebSocketDisconnect,
 )
 
 app = FastAPI()
 
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: list[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-        print(len(self.active_connections))
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-
-    async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
-
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            await connection.send_text(message)
-
-
-manager = ConnectionManager()
+games = {"abcdefgh": ["pirate1", "pirate2"], "12345678": ["pirate1"]}
 
 @app.websocket("/")
-async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket)
+async def websocket_endpoint(websocket: WebSocket, username: str, gamecode: str | None = None):
+
+    # Accept connection by default
+    await websocket.accept()
+
+    # If joining an existing game, check if gamecode is valid and username is unique
+    if gamecode:
+        if gamecode not in games:
+            await websocket.send_text(json.dumps({"status": "error", "reason": "gamecode"}))
+            await websocket.close()
+            return
+        if username in games[gamecode]:
+            await websocket.send_text(json.dumps({"status": "error", "reason": "username"}))
+            await websocket.close()
+            return
+
+    # Send success message
+    await websocket.send_text(json.dumps({"status": "success"}))
+
+    # If gamecode is null, start a new game
+
+    # Else, add player to existing game
+
+
+    # Default loop - remove
     try:
         while True:
             data = await websocket.receive_text()
-            await manager.send_personal_message(f"You wrote: {data}", websocket)
-            await manager.broadcast(f"Client #{client_id} says: {data}")
+            await websocket.send_text(data)
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        await manager.broadcast(f"Client #{client_id} left the chat")
+        return
