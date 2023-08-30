@@ -52,6 +52,7 @@ class Game:
               break
         
         await self._broadcast_state()
+        await self._broadcast_alert("player-joined", username)
 
     def _get_player(self, username):
         return next(player for player in self.players if player.username == username)
@@ -62,13 +63,21 @@ class Game:
     async def _broadcast_state(self):
         for player in self.players:
             await player.ws.send_text(json.dumps(self.get_state_message(player.username)))
+    
+    async def _broadcast_alert(self, status, username):
+        for player in self.players:
+            message = {"type": "alert", "status": status, "username": username}
+            if status == "new-host":
+                message["you"] = player.username == username
+            if status == "player-joined" and player.username == username:
+                continue
+            await player.ws.send_text(json.dumps(message))
 
     async def update(self, username, update):
         if update["state"] == self.state:
             action = update["action"]
             match action["type"]:
                 case "move-position":
-                    print("moving")
                     self._get_player(username).position = action["position"]
                 case _:
                     pass
@@ -87,12 +96,12 @@ class Game:
                 await player.ws.close()
             return
 
-        # TODO: Send player left alert
+        await self._broadcast_alert("player-left", player.username)
 
         if player.host:
             # Host has left, new host
             self.players[0].host = True
-            # TODO: Send new host alert
+            await self._broadcast_alert("new-host", self.players[0].username)
 
         if self.state == "play":
             # Substitute AI for player
