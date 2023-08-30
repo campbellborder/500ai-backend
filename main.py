@@ -2,7 +2,7 @@ import json
 import time
 
 from utils import get_unique_word
-from game import Game
+from game import Game, create_game
 
 from fastapi import (
     FastAPI,
@@ -24,11 +24,10 @@ class GameManager:
         game = self.games[gamecode]
         return any(player.username == username for player in game.players)
     
-    def new_game(self, username, ws) -> str:
+    async def new_game(self, username, ws) -> str:
         gamecode = get_unique_word(self.games.keys())
-        game = Game(gamecode, username, ws)
+        game = await create_game(gamecode, username, ws)
         self.games[gamecode] = game
-        print(f"num games: {len(self.games)}")
         return gamecode
     
     async def join_game(self, gamecode, username, ws) -> Game:
@@ -36,9 +35,9 @@ class GameManager:
         await game.add_player(username, ws)
         return game
     
-    def player_disconnect(self, gamecode, username):
+    async def player_disconnect(self, gamecode, username):
         game = self.games[gamecode]
-        game.player_disconnect(username)
+        await game.player_disconnect(username)
         if game.over:
             del self.games[gamecode]
 
@@ -71,19 +70,17 @@ async def websocket_endpoint(websocket: WebSocket, username: str, gamecode: str 
         game = await gm.join_game(gamecode, username, websocket)
 
     else: # Start a new game
-        gamecode = gm.new_game(username, websocket)
+        gamecode = await gm.new_game(username, websocket)
         game = gm.games[gamecode]
-
-    # Send state
-    state = game.get_state(username)
-    await websocket.send_text(json.dumps(state))
 
     # Main loop
     try:
         while True:
             # Recieve update
             data = await websocket.receive_text()
+            update = json.loads(data)
             # Send update to game
-            game.update(username, data)
+            await game.update(username, update)
+
     except WebSocketDisconnect:
-        gm.player_disconnect(gamecode, username)
+        await gm.player_disconnect(gamecode, username)
