@@ -20,7 +20,7 @@ class Game:
         self.gamecode = gamecode
         self.players = [Player(username, ws, Game.positions[0], host=True)]
         self.over = False
-        self.state = "setup"
+        self.phase = "setup"
         self._game = FiveHundredGame()
     
     async def _init(self):
@@ -56,13 +56,14 @@ class Game:
             await player.ws.send_text(json.dumps(message))
 
     async def update(self, username, update):
-        if update["state"] == self.state:
+        if update["phase"] == self.phase:
             action = update["action"]
             match action["type"]:
                 case "move-position":
                     self._get_player(username).position = action["position"]
-                case _:
-                    pass
+                case "start-game":
+                    self.phase = "play"
+                    self._game.init_game()
 
         await self._broadcast_state()
 
@@ -85,21 +86,24 @@ class Game:
             self.players[0].host = True
             await self._broadcast_alert("new-host", self.players[0].username)
 
-        if self.state == "play":
+        if self.phase == "play":
             # Substitute AI for player
             raise NotImplementedError
 
         await self._broadcast_state()
         
     def get_state_message(self, username):
-        if self.state == "setup":
-            message = {}
-            message["type"] = "state"
-            message["state"] = self.state
-            message["gamecode"] = self.gamecode
+        
+        message = {}
+        message["type"] = "state"
+        message["phase"] = self.phase
+        message["gamecode"] = self.gamecode
+        if self.phase == "setup":
             message["players"] = [Player.get_state_repr(player, username) for player in self.players]
             for position in set(Game.positions) - set(self._taken_positions()):
                 message["players"].append(Player.get_state_repr(None, None, position))
-            return message
-        else:
-            raise NotImplementedError
+            
+        elif self.phase == "play":
+            pass
+
+        return message
