@@ -2,28 +2,9 @@ import json
 from fastapi import (
     WebSocket
 )
+from classes.player import Player
+from rlcard.games.five_hundred.game import FiveHundredGame
 
-class Player():
-
-    def __init__(self, username: str, ws: WebSocket, position: str, host: bool = False):
-        self.username = username
-        self.ws = ws
-        self.position = position
-        self.host = host
-
-    def get_state_repr(player, you, position = None):
-        if player is None:
-            return {
-                "position": position,
-                "type": "empty"
-            }
-        return {
-            "position": player.position,
-            "type": "human",
-            "username": player.username,
-            "host": player.host,
-            "you": player.username == you
-        }
 
 async def create_game(gamecode, username, ws):
     game = Game(gamecode, username, ws)
@@ -34,12 +15,13 @@ class Game:
     
     positions = ["N", "E", "S", "W"]
 
-    def __init__(self, gamecode, username, ws):
+    def __init__(self, gamecode: str, username: str, ws: WebSocket):
         
         self.gamecode = gamecode
         self.players = [Player(username, ws, Game.positions[0], host=True)]
         self.over = False
         self.state = "setup"
+        self._game = FiveHundredGame()
     
     async def _init(self):
         await self._broadcast_state()
