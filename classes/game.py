@@ -26,9 +26,13 @@ class Game:
         await self._broadcast_state()
 
     async def add_player(self, username, ws):
+
         for position in Game.positions:
             if position not in self._taken_positions():
               player = Player(username, ws, position)
+              if self.phase == "play":
+                  bot = next(player for player in self.players if not player.is_human())
+                  self.players.remove(bot)
               self.players.append(player)
               break
         
@@ -39,7 +43,10 @@ class Game:
         return next(player for player in self.players if player.username == username)
 
     def _taken_positions(self):
-        return [player.position for player in self.players]
+        return [player.position for player in self.players if player.is_human()]
+
+    def game_full(self):
+        return len(self._taken_positions()) == len(Game.positions)
 
     async def _broadcast_state(self):
         for player in self.players:
@@ -101,11 +108,12 @@ class Game:
 
         if player.host:
             # Host has left, new host
-            self.players[0].host = True
-            await self._broadcast_alert("new-host", self.players[0].username)
+            new_host = next(player for player in self.players if player.is_human())
+            new_host.host = True
+            await self._broadcast_alert("new-host", new_host.username)
 
         if self.phase == "play":
-            self.players.append("robot", None, position)
+            self.players.append(Player("robot", None, position))
             self._order_players()
 
         await self._broadcast_state()

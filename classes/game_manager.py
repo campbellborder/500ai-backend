@@ -9,6 +9,9 @@ class GameManager:
     def game_exists(self, gamecode: str) -> bool:
         return gamecode in self.games
     
+    def game_full(self, gamecode: str) -> bool:
+        return self.games[gamecode].game_full()
+    
     def username_taken(self, gamecode: str, username: str) -> bool:
         game = self.games[gamecode]
         return any(player.username == username for player in game.players)

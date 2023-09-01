@@ -21,7 +21,11 @@ async def websocket_endpoint(websocket: WebSocket, username: str, gamecode: str 
     time.sleep(1) # TODO: will this reject other connection attempts?
     if gamecode:
         if not gm.game_exists(gamecode):
-            await websocket.send_text(json.dumps({"type": "connect", "status": "error", "reason": "gamecode"}))
+            await websocket.send_text(json.dumps({"type": "connect", "status": "error", "reason": "no-game"}))
+            await websocket.close()
+            return
+        if gm.game_full(gamecode):
+            await websocket.send_text(json.dumps({"type": "connect", "status": "error", "reason": "game-full"}))
             await websocket.close()
             return
         if gm.username_taken(gamecode, username):
