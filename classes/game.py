@@ -134,6 +134,7 @@ class Game:
                         player["hand"] = state["hands"][i]
                     player["bids"] = state["bids"][i]
                     player["num_cards"] = len(state["hands"][i])
+                    player["current"] = bool(state["current_player_id"] == i)
             
             elif state["round_phase"] == "discard":
                 # current player hand
