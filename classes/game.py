@@ -1,8 +1,8 @@
-import json
+import random
 from fastapi import (
     WebSocket
 )
-from classes.player import Player
+from classes.player import Player, bot_names
 from rlcard.games.five_hundred.game import FiveHundredGame
 
 async def create_game(gamecode, username, ws):
@@ -79,7 +79,7 @@ class Game:
         _, current_player_id = self._game.init_game()
         self.current_position = Game.positions[current_player_id]
         for position in set(Game.positions) - set(self._taken_positions()):
-            self.players.append(Player("robot", None, position))
+            self.players.append(Player(random.choice(bot_names), None, position))
 
         self._order_players()
 
@@ -113,7 +113,7 @@ class Game:
             await self._broadcast_alert("new-host", new_host.username)
 
         if self.phase == "play":
-            self.players.append(Player("robot", None, position))
+            self.players.append(Player(None, None, position))
             self._order_players()
 
         await self._broadcast_state()

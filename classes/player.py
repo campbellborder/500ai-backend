@@ -48,3 +48,9 @@ class Player():
     async def send(self, data):
         if self.is_human():
             await self.ws.send_text(json.dumps(data, default=custom_serializer))
+
+bot_names = [
+  "awesom-o-4000",
+  "i-robot",
+  "gary rollsbot"
+]
