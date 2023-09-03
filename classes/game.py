@@ -4,6 +4,7 @@ from fastapi import (
 )
 from classes.player import Player, bot_names
 from rlcard.games.five_hundred.game import FiveHundredGame
+from rlcard.games.five_hundred.utils.action_event import ActionEvent
 
 async def create_game(gamecode, username, ws):
     game = Game(gamecode, username, ws)
@@ -34,6 +35,7 @@ class Game:
                   bot = next(player for player in self.players if not player.is_human())
                   self.players.remove(bot)
               self.players.append(player)
+              self._order_players()
               break
         
         await self._broadcast_state()
@@ -68,21 +70,31 @@ class Game:
             action = update["action"]
             match action["type"]:
                 case "move-position":
-                    self._get_player(username).position = action["position"]
+                    self._handle_move(username, position)
                 case "start-game":
                     self._start_game()
+                case "make-bid":
+                    self._handle_bid(username, action["bid"])
+                case "play-card":
+                    self._handle_card(username, action["card"])
 
         await self._broadcast_state()
 
+    def _handle_bid(self, username, bid):
+        action = ActionEvent.from_repr(bid)
+        self._game.step(action)
+    
+    def _handle_move(self, username, position):
+        if action["position"] not in self._taken_positions():
+            self._get_player(username).position = action["position"]
+
     def _start_game(self):
         self.phase = "play"
-        _, current_player_id = self._game.init_game()
-        self.current_position = Game.positions[current_player_id]
+        self._game.init_game()
         for position in set(Game.positions) - set(self._taken_positions()):
             self.players.append(Player(random.choice(bot_names), None, position))
 
         self._order_players()
-
 
     def _num_human_players(self):
         return sum([player.is_human() for player in self.players])
@@ -132,32 +144,31 @@ class Game:
             
         elif self.phase == "play":
             state = self._game.get_perfect_information()
-            print(state)
             message["round_phase"] = state["round_phase"]
             message["scores"] = state["scores"]
-            if state["round_phase"] == "bid":
-                message["last_bid"] = state["last_bid"]
-                for i, player in enumerate(message["players"]):
-                    if player["you"]:
-                        player["hand"] = state["hands"][i]
+
+            for i, player in enumerate(message["players"]):
+                player["current"] = bool(state["current_player_id"] == i)
+                player["num_cards"] = len(state["hands"][i])
+                if player["you"]:
+                    player["hand"] = state["hands"][i]
+                    if player["current"]:
+                        player["actions"] = self._game.judger.get_legal_actions()
+                
+                if state["round_phase"] == "bid":
                     player["bids"] = state["bids"][i]
-                    player["num_cards"] = len(state["hands"][i])
-                    player["current"] = bool(state["current_player_id"] == i)
-            
-            elif state["round_phase"] == "discard":
-                # current player hand
-                pass
-            elif state["round_phase"] == "play":
-                # current player hand
-                # declarers hand if OM and 1 trick been played
-                pass
-            else:
-                # over?
-                pass
-            
-                # valid actions
+                    
+                elif state["round_phase"] == "discard":
+                    # ?
+                    pass
+                elif state["round_phase"] == "play":
+                    # declarers hand if OM and 1 trick been played
+                    # ?
+                    pass
+                else:
+                    # over?
+                    pass
 
-            print(message)
-
+        print(self.gamecode)
         return message
   

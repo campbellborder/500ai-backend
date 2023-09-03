@@ -4,11 +4,14 @@ from fastapi import (
 import json
 from rlcard.games.five_hundred.utils.five_hundred_card import FiveHundredCard
 from rlcard.games.five_hundred.utils.move import CallMove
+from rlcard.games.five_hundred.utils.action_event import ActionEvent
 
 def custom_serializer(obj):
     if isinstance(obj, FiveHundredCard):
         return obj.__repr__()
     if isinstance(obj, CallMove):
+        return obj.__repr__()
+    if isinstance(obj, ActionEvent):
         return obj.__repr__()
     raise TypeError(f"Type {type(obj).__name__} is not serializable")
 
