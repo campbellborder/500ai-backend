@@ -70,7 +70,7 @@ class Game:
             action = update["action"]
             match action["type"]:
                 case "move-position":
-                    self._handle_move(username, position)
+                    self._handle_move(username, action["position"])
                 case "start-game":
                     self._start_game()
                 case "make-bid":
@@ -85,8 +85,8 @@ class Game:
         self._game.step(action)
     
     def _handle_move(self, username, position):
-        if action["position"] not in self._taken_positions():
-            self._get_player(username).position = action["position"]
+        if position not in self._taken_positions():
+            self._get_player(username).position = position
 
     def _start_game(self):
         self.phase = "play"
