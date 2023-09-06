@@ -33,5 +33,5 @@ class GameManager:
         if num_human_players == 0:
             self.remove_game(gamecode)
 
-    async def remove_game(self, gamecode):
+    def remove_game(self, gamecode):
         del self.games[gamecode]
