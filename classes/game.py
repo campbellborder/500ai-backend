@@ -1,10 +1,11 @@
+import time
 import random
 from fastapi import (
     WebSocket
 )
 from classes.player import Player, bot_names
 from rlcard.games.five_hundred.game import FiveHundredGame
-from rlcard.games.five_hundred.utils.action_event import ActionEvent
+from rlcard.games.five_hundred.utils.action_event import ActionEvent, PassAction
 
 async def create_game(gamecode, username, ws):
     game = Game(gamecode, username, ws)
@@ -19,12 +20,14 @@ class Game:
         
         self.gamecode = gamecode
         self.players = [Player(username, ws, Game.positions[0], host=True)]
-        self.over = False
         self.phase = "setup"
         self._game = FiveHundredGame()
     
     async def _init(self):
         await self._broadcast_state()
+
+    def is_over(self):
+        return self._game.is_over
 
     async def add_player(self, username, ws):
 
@@ -41,30 +44,6 @@ class Game:
         await self._broadcast_state()
         await self._broadcast_alert("player-joined", username)
 
-    def _get_player(self, username):
-        return next(player for player in self.players if player.username == username)
-
-    def _taken_positions(self):
-        return [player.position for player in self.players if player.is_human()]
-
-    def game_full(self):
-        return len(self._taken_positions()) == len(Game.positions)
-
-    async def _broadcast_state(self):
-        for player in self.players:
-            if player.is_human():
-                await player.send(self.get_state_message(player.username))
-    
-    async def _broadcast_alert(self, status, username):
-        for player in self.players:
-            if player.is_human():
-                message = {"type": "alert", "status": status, "username": username}
-                if status == "new-host":
-                    message["you"] = player.username == username
-                if status == "player-joined" and player.username == username:
-                    continue
-                await player.send(message)
-
     async def update(self, username, update):
         if update["phase"] == self.phase:
             action = update["action"]
@@ -79,6 +58,86 @@ class Game:
                     self._handle_card(username, action["card"])
 
         await self._broadcast_state()
+
+    async def ai_update(self):
+        """Handle the ai players actions
+        """
+        if self.phase == "play": 
+            current_player = self.players[self._game.get_player_id()]
+            while not current_player.is_human():
+                legal_actions = self._game.judger.get_legal_actions()
+                if self._game.round.round_phase == "bid":
+                    if PassAction() in legal_actions:
+                        legal_actions = [PassAction(), PassAction(), PassAction(), PassAction(), random.choice(self._game.judger.get_legal_actions())]
+                action = random.choice(legal_actions)
+                self._game.step(action)
+
+                await self._broadcast_state()
+                current_player = self.players[self._game.get_player_id()]
+                time.sleep(1)
+
+    async def player_disconnect(self, username):
+        """Handle a player disconnecting 
+        
+            Parameters:
+                username (string): The username of the player that disconnected
+
+            Returns:
+                The number of human players remaining
+        """
+        
+        # Remove player from list
+        player = self._get_player(username)
+        position = player.position
+        self.players.remove(player)
+
+        # If no human players left, return
+        if not self._num_human_players(): 
+            return 0
+
+        await self._broadcast_alert("player-left", player.username)
+
+        if player.host:
+            # Host has left, define new host
+            new_host = next(player for player in self.players if player.is_human()) 
+            new_host.host = True
+            await self._broadcast_alert("new-host", new_host.username)
+
+        # Add an AI player if during play phase
+        if self.phase == "play":
+            self.players.append(Player(random.choice(bot_names), None, position))
+            self._order_players()
+
+        await self._broadcast_state()
+        return self._num_human_players()
+
+    def _get_player(self, username):
+        return next(player for player in self.players if player.username == username)
+
+    def _taken_positions(self):
+        return [player.position for player in self.players if player.is_human()]
+
+    def game_full(self):
+        return len(self._taken_positions()) == len(Game.positions)
+
+    async def _broadcast_state(self):
+        for player in self.players:
+            if player.is_human():
+                await player.send(self._get_state_message(player.username))
+    
+    async def _broadcast_alert(self, status, username):
+        for player in self.players:
+            if player.is_human():
+                message = {"type": "alert", "status": status, "username": username}
+                if status == "new-host":
+                    message["you"] = player.username == username
+                if status == "player-joined" and player.username == username:
+                    continue
+                await player.send(message)
+
+    def _handle_card(self, username, card):
+        action = ActionEvent.from_repr(card)
+        self._game.step(action)
 
     def _handle_bid(self, username, bid):
         action = ActionEvent.from_repr(bid)
@@ -101,36 +160,8 @@ class Game:
     
     def _order_players(self):
         self.players.sort(key=lambda player: Game.positions.index(player.position))
-
-    async def player_disconnect(self, username):
         
-        player = self._get_player(username)
-        position = player.position
-        self.players.remove(player)
-
-        if not self._num_human_players(): 
-            # Only player has left, destroy game
-            self.over = True
-            for player in self.players:
-                if player.is_human():
-                  await player.ws.close()
-            return
-
-        await self._broadcast_alert("player-left", player.username)
-
-        if player.host:
-            # Host has left, new host
-            new_host = next(player for player in self.players if player.is_human())
-            new_host.host = True
-            await self._broadcast_alert("new-host", new_host.username)
-
-        if self.phase == "play":
-            self.players.append(Player(None, None, position))
-            self._order_players()
-
-        await self._broadcast_state()
-        
-    def get_state_message(self, username):
+    def _get_state_message(self, username):
         
         message = {}
         message["type"] = "state"
@@ -169,6 +200,5 @@ class Game:
                     # over?
                     pass
 
-        print(self.gamecode)
         return message
   

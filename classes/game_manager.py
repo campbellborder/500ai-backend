@@ -29,6 +29,9 @@ class GameManager:
     
     async def player_disconnect(self, gamecode, username):
         game = self.games[gamecode]
-        await game.player_disconnect(username)
-        if game.over:
-            del self.games[gamecode]
+        num_human_players = await game.player_disconnect(username)
+        if num_human_players == 0:
+            self.remove_game(gamecode)
+
+    async def remove_game(self, gamecode):
+        del self.games[gamecode]
