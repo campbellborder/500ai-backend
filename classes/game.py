@@ -15,6 +15,10 @@ async def create_game(gamecode, username, ws):
 class Game:
     
     positions = ["N", "E", "S", "W"]
+    orders = {"H": ["H", "C", "D", "S"],
+              "D": ["D", "C", "H", "S"],
+              "C": ["C", "H", "S", "D"],
+              "S": ["S", "H", "C", "D"]}
 
     def __init__(self, gamecode: str, username: str, ws: WebSocket):
         
@@ -160,6 +164,18 @@ class Game:
     
     def _order_players(self):
         self.players.sort(key=lambda player: Game.positions.index(player.position))
+
+    def _sort_hand(self, hand):
+        
+        sorted_hand = []
+        trump_suit = self._game.round.get_trump_suit()
+        order = Game.orders.get(trump_suit, Game.orders["H"])
+        for suit in order:
+            suit_cards = [card for card in hand if card.get_round_suit(trump_suit) == suit]
+            suit_cards.sort(key=lambda x: x.get_round_rank(trump_suit), reverse=True)
+            sorted_hand += suit_cards
+        return sorted_hand
+        
         
     def _get_state_message(self, username):
         
@@ -189,7 +205,7 @@ class Game:
                 player["current"] = bool(state["current_player_id"] == i)
                 player["num_cards"] = len(state["hands"][i])
                 if player["you"]:
-                    player["hand"] = state["hands"][i]
+                    player["hand"] = self._sort_hand(state["hands"][i])
                     if player["current"]:
                         player["actions"] = self._game.judger.get_legal_actions()
                 
