@@ -27,7 +27,7 @@ class Game:
         await self._broadcast_state()
 
     def is_over(self):
-        return self._game.is_over
+        return self._game.is_over()
 
     async def add_player(self, username, ws):
 
