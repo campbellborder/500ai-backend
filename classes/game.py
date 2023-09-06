@@ -178,6 +178,13 @@ class Game:
             message["round_phase"] = state["round_phase"]
             message["scores"] = state["scores"]
 
+            if state["round_phase"] in ["discard", "play"]:
+                
+                message["contract"] = state["contract"].action
+                message["trick"] = state["trick_moves"]
+                if self._game.round.is_discarding_over():
+                  message["lead"] = Game.positions[state["lead"]]
+
             for i, player in enumerate(message["players"]):
                 player["current"] = bool(state["current_player_id"] == i)
                 player["num_cards"] = len(state["hands"][i])
