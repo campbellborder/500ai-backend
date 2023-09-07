@@ -5,7 +5,8 @@ from fastapi import (
 )
 from classes.player import Player, bot_names
 from rlcard.games.five_hundred.game import FiveHundredGame
-from rlcard.games.five_hundred.utils.action_event import ActionEvent, PassAction
+from rlcard.games.five_hundred.utils.action_event import PassAction, BidAction, PlayCardAction
+from rlcard.games.five_hundred.utils.five_hundred_card import FiveHundredCard
 
 async def create_game(gamecode, username, ws):
     game = Game(gamecode, username, ws)
@@ -56,10 +57,12 @@ class Game:
                     self._handle_move(username, action["position"])
                 case "start-game":
                     self._start_game()
+                case "pass":
+                    self._handle_pass()
                 case "make-bid":
-                    self._handle_bid(username, action["bid"])
+                    self._handle_bid(action["amount"], action["suit"])
                 case "play-card":
-                    self._handle_card(username, action["card"])
+                    self._handle_card(action["rank"], action["suit"])
 
         await self._broadcast_state()
 
@@ -139,12 +142,22 @@ class Game:
                     continue
                 await player.send(message)
 
-    def _handle_card(self, username, card):
-        action = ActionEvent.from_repr(card)
+    def _handle_card(self, rank, suit):
+        card = FiveHundredCard(suit, rank)
+        action = PlayCardAction(card)
         self._game.step(action)
 
-    def _handle_bid(self, username, bid):
-        action = ActionEvent.from_repr(bid)
+    def _handle_bid(self, amount, suit):
+        if suit == "M":
+            action = BidAction(None, None, misere=True, open=False)
+        elif suit == "OM":
+            action = BidAction(None, None, misere=True, open=True)
+        else:
+            action = BidAction(int(amount), suit)
+        self._game.step(action)
+
+    def _handle_pass(self):
+        action = PassAction()
         self._game.step(action)
     
     def _handle_move(self, username, position):
@@ -170,6 +183,9 @@ class Game:
         sorted_hand = []
         trump_suit = self._game.round.get_trump_suit()
         order = Game.orders.get(trump_suit, Game.orders["H"])
+        joker = next((card for card in hand if card.rank == "RJ"), None)
+        if joker:
+            sorted_hand.append(joker)
         for suit in order:
             suit_cards = [card for card in hand if card.get_round_suit(trump_suit) == suit]
             suit_cards.sort(key=lambda x: x.get_round_rank(trump_suit), reverse=True)
