@@ -231,7 +231,20 @@ class Game:
                 elif state["round_phase"] == "discard":
                     # ?
                     pass
+                
                 elif state["round_phase"] == "play":
+                    declarer_id = state["contract"].player.player_id
+                    declarer = bool(i == declarer_id)
+                    player["declarer"] = declarer
+                    if i == (declarer_id + 2) % 4:
+                        player["tricks_won"] = -1
+                    elif i == declarer_id:
+                        player["tricks_won"] = state["tricks_won"][i] + state["tricks_won"][(i+2) % 4]
+                    else:
+                        player["tricks_won"] = state["tricks_won"][i]
+                    
+                    if state["contract"].action.open and state["move_count"] >= 8 and declarer:
+                        player["hand"] = self._sort_hand(state["hands"][i])
                     # declarers hand if OM and 1 trick been played
                     # ?
                     pass
