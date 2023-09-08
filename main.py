@@ -52,11 +52,7 @@ async def websocket_endpoint(websocket: WebSocket, username: str, gamecode: str 
             update = json.loads(data)
             # Send update to game
             await game.update(username, update)
-            await game.ai_update()
-
-            if game.is_over():
-                print("game_over")
-            
+            await game.ai_update()  
 
     except WebSocketDisconnect:
         await gm.player_disconnect(gamecode, username)

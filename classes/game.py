@@ -31,9 +31,14 @@ class Game:
     async def _init(self):
         await self._broadcast_state()
 
+    def new_game(self):
+        self._game = FiveHundredGame()
+        self.phase = "setup"
+        self.players = [player for player in self.players if player.is_human()]
+
     def is_over(self):
         return self._game.is_over()
-
+    
     async def add_player(self, username, ws):
 
         for position in Game.positions:
@@ -63,7 +68,10 @@ class Game:
                     self._handle_bid(action["amount"], action["suit"])
                 case "play-card":
                     self._handle_card(action["rank"], action["suit"])
+                case "new-game":
+                    self.new_game()
 
+        self._check_game_over()
         await self._broadcast_state()
 
     async def ai_update(self):
@@ -71,14 +79,18 @@ class Game:
         """
         if self.phase == "play": 
             current_player = self.players[self._game.get_player_id()]
-            while not current_player.is_human():
+            while not current_player.is_human() and not self._game.is_over():
                 legal_actions = self._game.judger.get_legal_actions()
                 if self._game.round.round_phase == "bid":
                     if PassAction() in legal_actions:
                         legal_actions = [PassAction(), PassAction(), PassAction(), PassAction(), random.choice(self._game.judger.get_legal_actions())]
-                action = random.choice(legal_actions)
+                try:
+                  action = random.choice(legal_actions)
+                except Exception as e:
+                    raise e
                 self._game.step(action)
 
+                self._check_game_over()
                 await self._broadcast_state()
                 current_player = self.players[self._game.get_player_id()]
                 time.sleep(1)
@@ -117,6 +129,10 @@ class Game:
 
         await self._broadcast_state()
         return self._num_human_players()
+    
+    def _check_game_over(self):
+        if self._game.is_over():
+            self.phase = "over"
 
     def _get_player(self, username):
         return next(player for player in self.players if player.username == username)
@@ -143,7 +159,7 @@ class Game:
                 await player.send(message)
 
     def _handle_card(self, rank, suit):
-        card = FiveHundredCard(suit, rank)
+        card = FiveHundredCard(suit, rank) # TODO: Not sure if this is good, should be pulling card from FiveHundredCard _deck
         action = PlayCardAction(card)
         self._game.step(action)
 
@@ -187,7 +203,7 @@ class Game:
         if joker:
             sorted_hand.append(joker)
         for suit in order:
-            suit_cards = [card for card in hand if card.get_round_suit(trump_suit) == suit]
+            suit_cards = [card for card in hand if card.get_round_suit(trump_suit) == suit and card.rank != "RJ"]
             suit_cards.sort(key=lambda x: x.get_round_rank(trump_suit), reverse=True)
             sorted_hand += suit_cards
         return sorted_hand
@@ -243,14 +259,21 @@ class Game:
                     else:
                         player["tricks_won"] = state["tricks_won"][i]
                     
-                    if state["contract"].action.open and state["move_count"] >= 8 and declarer:
+                    if state["contract"].action.open and sum(state["tricks_won"]) >= 1 and declarer:
                         player["hand"] = self._sort_hand(state["hands"][i])
                     # declarers hand if OM and 1 trick been played
                     # ?
-                    pass
                 else:
                     # over?
                     pass
-
+        else: # Over
+          state = self._game.get_perfect_information()
+          scores = state["scores"]
+          message["scores"] = scores
+          for i, player in enumerate(message["players"]):
+              if scores[i % 2] > scores [(i + 1) % 2]:
+                  player["winner"] = True
+              else:
+                  player["winner"] = False
         return message
   
