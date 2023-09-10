@@ -11,7 +11,7 @@ from fastapi import (
 app = FastAPI()
 gm = GameManager()
 
-@app.websocket("/ws/")
+@app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, username: str, gamecode: str | None = None):
 
     # Accept connection by default
